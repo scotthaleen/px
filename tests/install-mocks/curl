@@ -1,0 +1,27 @@
+#!/bin/sh
+set -eu
+output=
+resolve=0
+secure=0
+redirect=0
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --output) output=$2; shift 2 ;;
+        --proto) [ "$2" = '=https' ]; secure=1; shift 2 ;;
+        --proto-redir) [ "$2" = '=https' ]; redirect=1; shift 2 ;;
+        --write-out) resolve=1; shift 2 ;;
+        --connect-timeout|--max-time) shift 2 ;;
+        --fail|--silent|--show-error|--location) shift ;;
+        https://github.com/scotthaleen/px/releases/*) url=$1; shift ;;
+        *) exit 91 ;;
+    esac
+done
+[ "$secure$redirect" = 11 ]
+[ "${FAIL_DOWNLOAD:-0}" = 0 ] || exit 22
+if [ "$resolve" = 1 ]; then
+    [ "$url" = https://github.com/scotthaleen/px/releases/latest ]
+    printf 'https://github.com/scotthaleen/px/releases/tag/2026.09.07.1'
+else
+    [ "$url" = "https://github.com/scotthaleen/px/releases/download/2026.09.07.1/${url##*/}" ]
+    cp "$FIXTURES/${url##*/}" "$output"
+fi

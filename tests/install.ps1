@@ -20,14 +20,14 @@ $savedTmp = $env:TMP
 function global:curl.exe {
     $arguments = @($args)
     if ($arguments -notcontains '=https' -or $arguments -notcontains '--proto-redir') { throw 'HTTPS flags missing' }
-    if ($script:failDownload) { $global:LASTEXITCODE = 22; return }
+    if ($global:PXInstallerMock.FailDownload) { $global:LASTEXITCODE = 22; return }
     $url = $arguments[-1]
     if ($url -eq 'https://github.com/scotthaleen/px/releases/latest') {
         'https://github.com/scotthaleen/px/releases/tag/2026.09.07.1'
     } else {
         if (-not $url.StartsWith('https://github.com/scotthaleen/px/releases/download/2026.09.07.1/')) { throw 'Unexpected URL' }
         $output = $arguments[[Array]::IndexOf($arguments, '--output') + 1]
-        Copy-Item -LiteralPath (Join-Path $script:fixtures ($url.Split('/')[-1])) -Destination $output
+        Copy-Item -LiteralPath (Join-Path $global:PXInstallerMock.Fixtures ($url.Split('/')[-1])) -Destination $output
     }
     $global:LASTEXITCODE = 0
 }
@@ -43,7 +43,7 @@ try {
     foreach ($name in @('px.exe', 'px-server.exe', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'release-manifest.json')) {
         Set-Content -LiteralPath (Join-Path $contents $name) -Value "fixture $name"
     }
-    $failDownload = $false
+    $global:PXInstallerMock = @{ FailDownload = $false; Fixtures = $fixtures }
     foreach ($arch in @('amd64', 'arm64')) {
         $env:PROCESSOR_ARCHITEW6432 = $arch.ToUpperInvariant()
         $archive = "px-2026.09.07.1-windows-$arch.zip"
@@ -57,7 +57,7 @@ try {
     }
     & $installer -Version '2026.09.07.1' -InstallDir (Join-Path $scratch 'custom bin')
     foreach ($failure in @('download', 'checksum', 'locked')) {
-        $failDownload = $failure -eq 'download'
+        $global:PXInstallerMock.FailDownload = $failure -eq 'download'
         Set-Content (Join-Path $fixtures 'SHA256SUMS') "$hash  $archive"
         if ($failure -eq 'checksum') { Set-Content (Join-Path $fixtures 'SHA256SUMS') "$('0' * 64)  $archive" }
         Set-Content (Join-Path $env:PX_INSTALL_DIR 'px.exe') 'old-px'
@@ -80,6 +80,7 @@ try {
     Write-Host 'Installer PowerShell tests passed'
 } finally {
     Remove-Item Function:/curl.exe
+    Remove-Variable PXInstallerMock -Scope Global -ErrorAction SilentlyContinue
     $env:PX_HOME = $savedHome
     $env:PROCESSOR_ARCHITEW6432 = $savedArch
     $env:PX_VERSION = $savedVersion

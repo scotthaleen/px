@@ -1,0 +1,5 @@
+#!/bin/sh
+if [ "${FAIL_REPLACE:-0}" = 1 ]; then
+    case "$*" in *px-server.new*) exit 1 ;; esac
+fi
+exec /bin/mv "$@"
