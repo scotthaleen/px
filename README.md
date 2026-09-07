@@ -1,8 +1,10 @@
 # PX
 
-PX is a persistent, direct peer-to-peer file exchange for small trusted device
-pools. Enrolled devices have stable names and scriptable file operations even
-when neither peer can accept an inbound connection.
+[![CI](https://github.com/scotthaleen/px/actions/workflows/ci.yml/badge.svg)](https://github.com/scotthaleen/px/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/scotthaleen/px)](https://github.com/scotthaleen/px/releases/latest)
+
+PX is an experimental, direct peer-to-peer file exchange for small trusted device
+pools. Enrolled devices have stable names and scriptable file operations.
 
 ```text
 laptop agent -- signaling and presence --> px-server <-- signaling and presence -- vm agent
@@ -13,42 +15,50 @@ The self-hosted rendezvous server authenticates members, tracks presence, and
 forwards signaling. File bytes travel directly between agents over an
 authenticated WebRTC DataChannel; they are never relayed through `px-server`.
 
-Read [why PX exists](docs/product-overview.md) for the product model, intended
-use cases, self-hosted trust boundary, and honest comparison with cloud storage,
-SSH, VPNs, synchronization, network shares, and one-time transfer tools.
+You run your own rendezvous server. Both peers must be online, and some NAT or
+firewall combinations cannot establish a direct connection. There is no TURN
+relay fallback.
 
-## Status And Boundaries
+## Install
 
-PX is pre-release software. The core implementation is substantially complete;
-support claims are governed by the remaining [native validation
-campaign](docs/validation/native.md). Linux, APFS, and NTFS put implementations
-remain validation-pending. Unsupported Windows filesystems fail closed.
+### Homebrew
 
-PX is direct-only and has no TURN fallback. Both peers must be online, and some
-restrictive networks will fail to connect. PX is not a VPN, synchronization
-service, remote shell, network share, or offline store-and-forward
-service.
-
-Each context is one deliberately flat trusted pool. Every active member can use
-the file operations enabled by another member and can admit another member. Use
-a separate rendezvous deployment for an independent trust pool.
-
-See the [product specification](docs/product-spec.md) for the normative product
-boundary and security model.
-
-## Quick Start
-
-Install both binaries from [GitHub Releases](https://github.com/scotthaleen/px/releases)
-with the public [`install.sh`](install.sh) or [`install.ps1`](install.ps1).
-Follow the [installation guide](docs/guides/installation.md#public-installers)
-to review and run the installer, select a version or destination, and set `PATH`.
-The installers do not start services or enroll devices. Homebrew users can use
-the [tap in this repository](docs/guides/homebrew.md):
+The [tap lives in this repository](docs/guides/homebrew.md):
 
 ```sh
 brew tap scotthaleen/px https://github.com/scotthaleen/px
 brew install scotthaleen/px/px
 ```
+
+### Linux And macOS
+
+Download and review the installer, then run it:
+
+```sh
+curl -fsSL https://github.com/scotthaleen/px/releases/latest/download/install.sh -o install.sh
+sh install.sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+### Windows
+
+Download and review the installer, then run it in PowerShell under your script
+execution policy:
+
+```powershell
+curl.exe -fL https://github.com/scotthaleen/px/releases/latest/download/install.ps1 -o install.ps1
+if ($LASTEXITCODE -ne 0) { throw 'Installer download failed' }
+.\install.ps1
+$env:Path = "$HOME\bin;$env:Path"
+```
+
+Both installers verify archive checksums and install `px` and `px-server`.
+They do not start services, enroll devices, or modify your persistent `PATH`.
+For version pinning, custom destinations, upgrades, or manual archive installation,
+see the [installation guide](docs/guides/installation.md). Archives are also
+available on [GitHub Releases](https://github.com/scotthaleen/px/releases).
+
+## Quick Start
 
 After installing the binaries, start the per-user agent. Then enroll this device
 through your rendezvous server URL:
@@ -69,6 +79,20 @@ px "@vm" send ./artifact.tar.zst
 Continue with [installation](docs/guides/installation.md),
 [onboarding](docs/guides/onboarding.md), and the complete
 [usage guide](docs/guides/usage.md).
+
+## How It Works
+
+Each context is one flat trusted pool. Every active member can use the file
+operations enabled by another member and can admit another member. Use a separate
+rendezvous deployment for an independent trust pool.
+
+PX moves files on request. It is not a VPN, synchronization service, remote shell,
+or offline store-and-forward service. Filesystem operations have platform-specific
+constraints; see [filesystem access](docs/guides/filesystem-access.md).
+
+Read [why PX exists](docs/product-overview.md) for the design and comparisons, or
+the [product specification](docs/product-spec.md) for the security model and
+protocol boundaries.
 
 ## Self-Hosting
 
