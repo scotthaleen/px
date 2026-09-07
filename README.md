@@ -38,9 +38,20 @@ boundary and security model.
 
 ## Quick Start
 
-After obtaining a release archive, when available, or building PX from source,
-install and start the per-user agent. Then enroll this device through your
-rendezvous server URL:
+Install both binaries from [GitHub Releases](https://github.com/scotthaleen/px/releases)
+with the public [`install.sh`](install.sh) or [`install.ps1`](install.ps1).
+Follow the [installation guide](docs/guides/installation.md#public-installers)
+to review and run the installer, select a version or destination, and set `PATH`.
+The installers do not start services or enroll devices. Homebrew users can use
+the [tap in this repository](docs/guides/homebrew.md):
+
+```sh
+brew tap scotthaleen/px https://github.com/scotthaleen/px
+brew install scotthaleen/px/px
+```
+
+After installing the binaries, start the per-user agent. Then enroll this device
+through your rendezvous server URL:
 
 ```console
 px startup install

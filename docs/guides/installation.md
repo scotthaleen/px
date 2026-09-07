@@ -1,7 +1,8 @@
 # Installation and Per-User Startup
 
-If release artifacts are available, obtain the archive for your platform and
-the adjacent `SHA256SUMS` from this repository's Releases page. Unix archives
+Use the public installers below, or obtain the archive for your platform and
+the adjacent `SHA256SUMS` from the
+[GitHub Releases page](https://github.com/scotthaleen/px/releases). Unix archives
 are named `px-VERSION-OS-ARCH.tar.gz`; Windows archives are named
 `px-VERSION-windows-ARCH.zip`. Each contains `px`, `px-server`, the project
 license, third-party notices, and a release manifest. Otherwise, contributors
@@ -11,6 +12,134 @@ in [Development](../development.md).
 This page covers the per-user agent. For an internet-facing self-hosted
 `px-server`, including TLS, persistent server state, backups, logging, and
 shutdown, see [Secure Rendezvous Deployment](secure-rendezvous.md).
+
+## Public Installers
+
+The installers download only from `scotthaleen/px` GitHub releases. They install
+both `px` and `px-server`. They do not use `sudo`, modify `PATH`, start services,
+enroll a device, configure a rendezvous server, or change PX state.
+
+The default version is GitHub's latest published release, not a version derived
+from today's date. To pin a release, use its exact CalVer tag: `YYYY.MM.DD` or
+`YYYY.MM.DD.N`, with no `v` prefix. The examples use placeholders; replace them
+with a tag from the Releases page. If no release has been published, the
+installers fail without installing binaries. Build from source instead.
+
+### Linux And macOS
+
+Requirements: a POSIX shell, `curl`, `tar`, `mktemp`, `awk`, standard file
+utilities, and either `sha256sum` or `shasum`. The installer detects Linux or
+macOS and amd64 or arm64. Other platforms fail before download.
+
+1. Download the installer over HTTPS:
+
+```sh
+curl --fail --show-error --silent --location --proto '=https' --proto-redir '=https' \
+  --output install.sh https://raw.githubusercontent.com/scotthaleen/px/master/install.sh
+```
+
+2. Review `install.sh`, then run it:
+
+```sh
+sh install.sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+The default destination is `$HOME/.local/bin`. To select a version and directory:
+
+```sh
+sh install.sh --version YYYY.MM.DD --dir "$HOME/.local/bin"
+```
+
+`PX_VERSION` and `PX_INSTALL_DIR` set the same defaults. Command-line options
+override environment variables. Relative destination paths are resolved from
+the current directory. Add the destination to your shell configuration if you
+want it on `PATH` after the next login.
+
+### Windows
+
+Requirements: Windows PowerShell 5.1 or PowerShell 7, `curl.exe` on `PATH`, and
+an amd64 or arm64 system. `curl.exe` is included with current Windows releases.
+
+1. Download the installer in PowerShell:
+
+```powershell
+curl.exe --fail --show-error --silent --location --proto '=https' --proto-redir '=https' `
+  --output install.ps1 https://raw.githubusercontent.com/scotthaleen/px/master/install.ps1
+if ($LASTEXITCODE -ne 0) { throw 'Installer download failed' }
+```
+
+2. Review `install.ps1`, then run it under your organization's script execution
+   policy:
+
+```powershell
+.\install.ps1
+$env:Path = "$HOME\bin;$env:Path"
+```
+
+The default destination is `$HOME\bin`. To select a version and directory:
+
+```powershell
+.\install.ps1 -Version YYYY.MM.DD -InstallDir "$HOME\bin"
+```
+
+`PX_VERSION` and `PX_INSTALL_DIR` set the same defaults. Parameters override
+environment variables. Add the destination to your user `PATH` through Windows
+Environment Variables settings for future sessions. The installer does not
+change execution policy or request administrator rights.
+
+### Verification And Recovery
+
+Both installers require HTTPS for downloads and redirects. They require exactly
+one SHA-256 entry for the selected archive in the adjacent `SHA256SUMS` and
+verify the archive before extracting binaries. Checksums detect corruption;
+they are not independent signatures and do not protect against a compromised
+GitHub repository or release publisher. Review the downloaded installer before
+execution. To pin the installer itself, replace `master` in its download URL
+with a trusted release tag or commit that contains the script.
+
+The installers validate the flat archive layout and reject unexpected entries,
+duplicates, and special files. Only the two binaries are installed; the license,
+third-party notices, and release manifest remain available in the release
+archive. Successful installation prints the version, platform, and destination.
+
+Before upgrading, stop the agent and any separately managed `px-server` process.
+The installers stage both binaries in the destination filesystem and replace
+each binary without overwriting its contents in place. If a replacement fails,
+they attempt to restore the previous binaries. Replacement of the pair is not
+one atomic operation; do not run simultaneous upgrades or start the binaries
+during installation.
+
+Download, checksum, and validation failures leave existing binaries unchanged.
+Temporary downloads and staging files are removed on success and ordinary
+failure. If rollback fails, the installer reports the retained backup directory.
+A lock named `.px-install.lock` prevents another installer from proceeding. After
+an interrupted process or failed rollback, confirm that no installer is running,
+restore any retained `*.old` backups if needed, and remove the lock and staging
+directory before retrying. Force termination or power loss can require this
+manual recovery. An empty newly created destination directory may remain.
+
+### Installer Tests
+
+From a source checkout, run the hermetic tests without downloading releases:
+
+```sh
+sh tests/install.sh
+shellcheck install.sh tests/install.sh tests/install-mocks/*
+```
+
+On Windows:
+
+```powershell
+powershell -NoProfile -File tests/install.ps1
+```
+
+The shell suite mocks downloads and platform detection, uses isolated scratch
+state, and tests checksum failures, archive rejection, and replacement rollback.
+The PowerShell suite parses the installer and tests mocked downloads, both
+architectures, checksum failures, and rollback when a server executable is
+locked. On non-Windows systems, `pwsh -NoProfile -File tests/install.ps1` runs
+only the syntax check. These tests do not replace native release validation.
 
 ## Unix Archive
 
@@ -154,16 +283,19 @@ executable in place on Unix and macOS:
 
 ```sh
 "$HOME/.local/bin/px" startup stop
-install -m 0755 ./px ./px-server "$HOME/.local/bin/"
+sh install.sh --version YYYY.MM.DD --dir "$HOME/.local/bin"
 "$HOME/.local/bin/px" startup upgrade
 ```
 
 ```powershell
 $Bin = "$HOME\bin"
 & "$Bin\px.exe" startup stop
-Copy-Item -Force .\px-release\px.exe,.\px-release\px-server.exe $Bin
+.\install.ps1 -Version YYYY.MM.DD -InstallDir $Bin
 & "$Bin\px.exe" startup upgrade
 ```
+
+Use the reviewed installer downloaded above and replace `YYYY.MM.DD` with the
+target release. Run `startup upgrade` only after installation succeeds.
 
 `startup upgrade` rewrites the startup definition for the executable invoking
 the command and restarts the agent without deleting PX state. Use `startup

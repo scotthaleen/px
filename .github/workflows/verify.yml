@@ -26,6 +26,13 @@ jobs:
       - name: Install Task
         shell: bash
         run: go install github.com/go-task/task/v3/cmd/task@v3.44.1
+      - name: Test Unix installer
+        if: runner.os != 'Windows'
+        run: sh tests/install.sh
+      - name: Test Windows installer
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: ./tests/install.ps1
       - name: Full verification
         if: runner.os == 'Linux'
         run: task --concurrency 1 check

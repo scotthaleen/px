@@ -57,12 +57,17 @@ jobs:
           echo "BUILD_DATE=$built" >> "$GITHUB_ENV"
       - name: Build archives
         run: task package VERSION="$VERSION" COMMIT="$GITHUB_SHA" BUILD_DATE="$BUILD_DATE"
+      - name: Include public installers
+        run: |
+          cp install.sh install.ps1 "dist/release/$VERSION/"
+          cd "dist/release/$VERSION"
+          sha256sum install.sh install.ps1 >> SHA256SUMS
       - name: Verify checksums and Linux executables
         shell: bash
         run: |
           cd "dist/release/$VERSION"
           sha256sum --check SHA256SUMS
-          test "$(wc -l < SHA256SUMS)" -eq 6
+          test "$(wc -l < SHA256SUMS)" -eq 8
           mkdir verify
           tar -xzf "px-$VERSION-linux-amd64.tar.gz" -C verify
           ./verify/px version
@@ -75,6 +80,8 @@ jobs:
           path: |
             dist/release/${{ steps.metadata.outputs.version }}/*.tar.gz
             dist/release/${{ steps.metadata.outputs.version }}/*.zip
+            dist/release/${{ steps.metadata.outputs.version }}/install.sh
+            dist/release/${{ steps.metadata.outputs.version }}/install.ps1
             dist/release/${{ steps.metadata.outputs.version }}/SHA256SUMS
           if-no-files-found: error
           retention-days: 7
