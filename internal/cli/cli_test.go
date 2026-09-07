@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -460,7 +461,7 @@ func TestSpoolInputBoundsAndCleansProducerFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o600 {
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 		t.Fatalf("spool mode = %v", info.Mode())
 	}
 	if err := os.Remove(path); err != nil {
@@ -799,17 +800,21 @@ func TestEnsurePrivateOnboardingDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(path)
-	if err != nil || !info.IsDir() || info.Mode().Perm() != 0o700 {
+	if err != nil || !info.IsDir() || runtime.GOOS != "windows" && info.Mode().Perm() != 0o700 {
 		t.Fatalf("directory = %v, %v", info, err)
 	}
 	existing := filepath.Join(t.TempDir(), "existing")
 	if err := os.Mkdir(existing, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	before, err := os.Stat(existing)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := ensurePrivateDirectory(existing); err != nil {
 		t.Fatal(err)
 	}
-	if info, err := os.Stat(existing); err != nil || info.Mode().Perm() != 0o755 {
+	if info, err := os.Stat(existing); err != nil || info.Mode() != before.Mode() {
 		t.Fatalf("existing directory permissions changed: %v, %v", info, err)
 	}
 	file := filepath.Join(t.TempDir(), "file")

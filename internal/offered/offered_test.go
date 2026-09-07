@@ -541,10 +541,11 @@ type cleanupPendingStage struct {
 func (s *cleanupPendingStage) File() *os.File { return s.file }
 
 func (s *cleanupPendingStage) Publish(context.Context, string) (bool, error) {
+	_ = s.file.Close()
 	return true, cleanupPendingTestError{}
 }
 
-func (s *cleanupPendingStage) Cleanup(context.Context) error { return nil }
+func (s *cleanupPendingStage) Cleanup(context.Context) error { return s.file.Close() }
 
 type cleanupPendingTestError struct{}
 

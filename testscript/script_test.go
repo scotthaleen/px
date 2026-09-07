@@ -475,7 +475,10 @@ func TestEnrollmentAdapterProcessConformance(t *testing.T) {
 			t.Fatalf("settle existing pending: %v\n%s", err, output)
 		}
 	}
-	for index := range 94 {
+	// Linux ignores SO_RCVBUF on Unix sockets. Exceed its default send queue
+	// (roughly 278 small writes), rather than relying on the fixture's read buffer.
+	// Each enrollment/approval pair produces two separately flushed markers.
+	for index := range 192 {
 		key, _, err := ed25519.GenerateKey(rand.Reader)
 		if err != nil {
 			t.Fatal(err)

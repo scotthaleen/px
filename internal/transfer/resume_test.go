@@ -1702,9 +1702,16 @@ func TestTerminalCleanupSurvivesCanceledProtocolContext(t *testing.T) {
 				receiverChannel = &cancelOnControl{Channel: receiver, controlType: "ack", cancel: cancelReceiver}
 			}
 			received := make(chan error, 1)
+			inbox := t.TempDir()
+			receiverDone := make(chan struct{})
 			go func() {
-				_, err := ReceiveResumable(receiverCtx, receiverChannel, receiveConfig(receiverStore, t.TempDir(), nil))
+				defer close(receiverDone)
+				_, err := ReceiveResumable(receiverCtx, receiverChannel, receiveConfig(receiverStore, inbox, nil))
 				received <- err
+			}()
+			defer func() {
+				cancelReceiver()
+				<-receiverDone
 			}()
 			cfg := sendConfig(senderStore, spool, nil)
 			cfg.Name, cfg.StdinSpool = "terminal.txt", true

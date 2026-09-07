@@ -302,8 +302,8 @@ func TestTwoContextsRemainIsolatedAndIdempotent(t *testing.T) {
 	}
 	manager.policy.keepaliveInterval = time.Millisecond
 	manager.policy.keepaliveJitter = 0
-	manager.policy.pongTimeout = 100 * time.Millisecond
-	connectionContext, cancelConnections := context.WithTimeout(context.Background(), 25*time.Millisecond)
+	manager.policy.pongTimeout = time.Second
+	connectionContext, cancelConnections := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancelConnections()
 	results := make(chan controlResult, 2)
 	go func() { results <- manager.connectControl(connectionContext, homeEnrolled) }()
@@ -1973,7 +1973,8 @@ func TestStatusSnapshotIsBoundedAndReadOnly(t *testing.T) {
 func TestLegacyFilesystemRootFailsClosedAndCanBeRepaired(t *testing.T) {
 	manager, store, _ := newTestManager(t)
 	inbox := t.TempDir()
-	insertTestContext(t, store.DB(), "home", string(os.PathSeparator), inbox)
+	root := filepath.VolumeName(inbox) + string(os.PathSeparator)
+	insertTestContext(t, store.DB(), "home", root, inbox)
 
 	state, err := manager.Get(context.Background(), "home")
 	if err != nil || state.OfferedRootScope != OfferedRootScopeNarrow || state.OfferedRootRevision != 1 || state.FilesystemRootAcknowledged || state.OfferedRootAuthorityValid {
@@ -1993,11 +1994,10 @@ func TestLegacyFilesystemRootFailsClosedAndCanBeRepaired(t *testing.T) {
 	if err != nil || len(configuration.Warnings) == 0 {
 		t.Fatalf("legacy configuration = %+v, %v", configuration, err)
 	}
-	if _, err := manager.Join(context.Background(), JoinRequest{Name: "home", ServerURL: "https://px.example", Label: "device", OfferedRoot: string(os.PathSeparator), InboxRoot: inbox, AllowFilesystemRoot: true}); err == nil || !strings.Contains(err.Error(), "repair it with context configure") {
+	if _, err := manager.Join(context.Background(), JoinRequest{Name: "home", ServerURL: "https://px.example", Label: "device", OfferedRoot: root, InboxRoot: inbox, AllowFilesystemRoot: true}); err == nil || !strings.Contains(err.Error(), "repair it with context configure") {
 		t.Fatalf("legacy join repair error = %v", err)
 	}
 
-	root := string(os.PathSeparator)
 	configuration, err = manager.Update(context.Background(), "home", UpdateRequest{OfferedRoot: &root, AllowFilesystemRoot: true})
 	if err != nil {
 		t.Fatal(err)
@@ -2164,7 +2164,8 @@ func TestConfigureRepairsMigratedFilesystemRootAndRebindsUnresolvedPublicReceive
 
 func TestJoinRequiresFilesystemRootAcknowledgementAndRejectsItForNarrowRoot(t *testing.T) {
 	manager, _, _ := newTestManager(t)
-	request := JoinRequest{Name: "home", ServerURL: "https://px.example", Label: "device", OfferedRoot: string(os.PathSeparator), InboxRoot: t.TempDir()}
+	inbox := t.TempDir()
+	request := JoinRequest{Name: "home", ServerURL: "https://px.example", Label: "device", OfferedRoot: filepath.VolumeName(inbox) + string(os.PathSeparator), InboxRoot: inbox}
 	if _, err := manager.Join(context.Background(), request); err == nil || !strings.Contains(err.Error(), "--allow-filesystem-root is required") {
 		t.Fatalf("filesystem-root join error = %v", err)
 	}

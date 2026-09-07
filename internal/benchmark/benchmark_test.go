@@ -15,7 +15,26 @@ func TestBidirectionalBenchmark(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	served := make(chan error, 1)
-	go func() { served <- Serve(ctx, responder) }()
+	channel := &scriptedChannel{receive: responder.Receive, send: func(ctx context.Context, message direct.Message) error {
+		if message.Text {
+			value, err := decodeControl(message)
+			if err != nil {
+				return err
+			}
+			if value.Type == "pong" {
+				// Give the measured RTT real elapsed time beyond Windows clock resolution.
+				timer := time.NewTimer(20 * time.Millisecond)
+				defer timer.Stop()
+				select {
+				case <-timer.C:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}
+		}
+		return responder.Send(ctx, message)
+	}}
+	go func() { served <- Serve(ctx, channel) }()
 	result, err := Run(ctx, initiator, MinDuration)
 	if err != nil {
 		t.Fatal(err)

@@ -452,11 +452,14 @@ func (c *wireClient) stallDoorbell(ctx context.Context, duration time.Duration, 
 		_ = deadlineSetter.SetReadDeadline(time.Now().Add(time.Second))
 	}
 	buffer := make([]byte, 4096)
+	drained := 0
 	for {
-		if _, err := connection.Read(buffer); err != nil {
+		n, err := connection.Read(buffer)
+		drained += n
+		if err != nil {
 			var networkError net.Error
 			if errors.As(err, &networkError) && networkError.Timeout() {
-				return errors.New("stalled doorbell was not disconnected")
+				return fmt.Errorf("stalled doorbell was not disconnected (drained %d buffered bytes)", drained)
 			}
 			return nil
 		}

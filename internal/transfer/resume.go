@@ -559,6 +559,7 @@ func SendResumable(ctx context.Context, channel Channel, cfg ResumeSendConfig) (
 		return Result{}, err
 	}
 	if response.Type == "rejected" {
+		_ = file.Close()
 		if sendResumeControl(ctx, channel, resumeControl{Version: resumeVersion, Type: "ack"}) == nil {
 			cleanupCtx, cancelCleanup := durableCleanupContext(ctx)
 			_ = cfg.Store.finishSend(cleanupCtx, record.ID)
@@ -569,6 +570,9 @@ func SendResumable(ctx context.Context, channel Channel, cfg ResumeSendConfig) (
 	}
 	if response.Type == "committed" {
 		result := Result{Name: record.Name, Bytes: record.Size, SHA256: record.SHA256}
+		if err := file.Close(); err != nil {
+			return result, err
+		}
 		if err := cfg.Store.observeSend(ctx, record); err != nil {
 			return result, err
 		}
@@ -641,6 +645,10 @@ func SendResumable(ctx context.Context, channel Channel, cfg ResumeSendConfig) (
 	if hex.EncodeToString(streamHash.Sum(nil)) != record.SHA256 {
 		_ = sendResumeControl(ctx, channel, resumeControl{Version: resumeVersion, Type: "failed", Error: "source changed during transfer"})
 		return Result{}, sourceError(SourceInvalidCode, "local source changed during transfer", nil)
+	}
+	// Windows cannot remove the stdin spool during terminal cleanup while this handle is open.
+	if err := file.Close(); err != nil {
+		return Result{}, err
 	}
 	if err := sendResumeControl(ctx, channel, resumeControl{Version: resumeVersion, Type: "complete"}); err != nil {
 		return Result{}, err

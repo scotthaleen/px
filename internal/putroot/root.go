@@ -15,6 +15,10 @@ func Canonical(path string) (string, error) {
 	if path == "" {
 		return "", ErrInvalid
 	}
+	// Reject ambiguous Windows roots before Abs resolves them against a drive's working directory.
+	if runtime.GOOS == "windows" && (filepath.VolumeName(path) != "" || strings.HasPrefix(path, `/`) || strings.HasPrefix(path, `\`)) && broadOrUnsupported(path, "windows") {
+		return "", ErrInvalid
+	}
 	absolute, err := filepath.Abs(path)
 	if err != nil {
 		return "", ErrInvalid
@@ -53,14 +57,13 @@ func broadOrUnsupported(path, goos string) bool {
 	if goos != "windows" {
 		return path == string(os.PathSeparator)
 	}
-	volume := filepath.VolumeName(path)
 	if strings.HasPrefix(path, `\\`) || strings.HasPrefix(path, `//`) || strings.HasPrefix(path, `\`) || strings.HasPrefix(path, `/`) {
 		return true
 	}
 	if len(path) >= 2 && isLetter(path[0]) && path[1] == ':' {
-		return len(path) == 2 || len(path) == 3 && (path[2] == '\\' || path[2] == '/') || volume == ""
+		return len(path) <= 3 || path[2] != '\\' && path[2] != '/'
 	}
-	return volume == ""
+	return true
 }
 
 func isLetter(value byte) bool {

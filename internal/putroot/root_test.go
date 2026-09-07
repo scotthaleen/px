@@ -31,9 +31,14 @@ func TestCanonicalRequiresExistingNarrowNonLinkDirectory(t *testing.T) {
 }
 
 func TestWindowsRootFormsFailClosed(t *testing.T) {
-	for _, path := range []string{`C:\`, `C:relative`, `\\server\share`, `\\?\C:\root`, `\\?\Volume{1234}\`} {
+	for _, path := range []string{`C:`, `C:\`, `C:/`, `C:relative`, `C:r`, `\relative`, `/relative`, `\\server\share`, `\\?\C:\root`, `\\?\Volume{1234}\`} {
 		if !broadOrUnsupported(path, "windows") {
 			t.Errorf("accepted unsafe Windows form %q", path)
+		}
+	}
+	for _, path := range []string{`C:\root`, `C:/root`, `d:\root\child`} {
+		if broadOrUnsupported(path, "windows") {
+			t.Errorf("rejected narrow Windows form %q", path)
 		}
 	}
 }
