@@ -1,0 +1,137 @@
+version: "3"
+
+vars:
+  MODULE: github.com/scotthaleen/px
+  VERSION:
+    sh: date -u +%Y.%m.%d
+  COMMIT:
+    sh: git rev-parse --short=12 HEAD 2>/dev/null || printf unknown
+  BUILD_DATE:
+    sh: date -u +%Y-%m-%dT%H:%M:%SZ
+  LDFLAGS: >-
+    -X {{.MODULE}}/internal/versioninfo.Version={{.VERSION}}
+    -X {{.MODULE}}/internal/versioninfo.Commit={{.COMMIT}}
+    -X {{.MODULE}}/internal/versioninfo.Date={{.BUILD_DATE}}
+
+env:
+  PX_HOME: "{{.ROOT_DIR}}/tmp/test"
+
+tasks:
+  fmt:
+    desc: Format Go source with gofumpt
+    cmds:
+      - go tool gofumpt -w .
+
+  fmt:check:
+    desc: Check Go source formatting
+    cmds:
+      - test -z "$(go tool gofumpt -l .)"
+
+  lint:
+    desc: Run static checks, including process- and smoke-tagged source
+    cmds:
+      - go vet -tags='process smoke' ./...
+
+  test:
+    desc: Run unit and package tests (excluding full-binary process tests)
+    cmds:
+      - go test -count=1 ./...
+
+  test:process:
+    desc: Run the full-binary process suite once
+    cmds:
+      - go test -count=1 -tags=process ./testscript
+
+  test:process:race:
+    desc: Race-check process tests with concurrent in-harness work
+    cmds:
+      - go test -count=1 -race -tags=process ./testscript -run '^(TestAgentTransferAndCancellation|TestTransferInventoryProcessSurvivesRestartAndDeletesPrivateSpool|TestServerEnrollmentAuthenticationAndRevocation)$'
+
+  test:process:check:
+    internal: true
+    cmds:
+      - task: test:process
+      - task: test:smoke
+      - task: test:process:race
+
+  test:smoke:
+    desc: Run representative full-binary process tests
+    cmds:
+      - go test -count=1 -tags='process smoke' ./testscript -run '^(TestScripts|TestAgentIPCLifecycle|TestServerEnrollmentAuthenticationAndRevocation|TestPeerWorkflowSmoke)$'
+
+  test:race:
+    desc: Run unit and package tests with the race detector
+    cmds:
+      - go test -count=1 -race ./...
+
+  vuln:
+    desc: Check dependencies for known vulnerabilities
+    cmds:
+      - go tool govulncheck ./...
+
+  build:
+    desc: Build both binaries with build metadata
+    cmds:
+      - mkdir -p "{{.ROOT_DIR}}/dist/bin"
+      - go build -trimpath -ldflags "{{.LDFLAGS}}" -o "{{.ROOT_DIR}}/dist/bin/px{{exeExt}}" ./cmd/px
+      - go build -trimpath -ldflags "{{.LDFLAGS}}" -o "{{.ROOT_DIR}}/dist/bin/px-server{{exeExt}}" ./cmd/px-server
+
+  cross-build:
+    desc: Cross-build both binaries for supported operating systems
+    cmds:
+      - mkdir -p "{{.ROOT_DIR}}/dist/cross"
+      - for:
+          matrix:
+            GOOS: [linux, darwin, windows]
+            GOARCH: [amd64, arm64]
+        cmd: >-
+          GOOS={{.ITEM.GOOS}} GOARCH={{.ITEM.GOARCH}} CGO_ENABLED=0
+          go build -trimpath -ldflags "{{.LDFLAGS}}"
+          -o "{{.ROOT_DIR}}/dist/cross/px-{{.ITEM.GOOS}}-{{.ITEM.GOARCH}}{{if eq .ITEM.GOOS "windows"}}.exe{{end}}"
+          ./cmd/px
+      - for:
+          matrix:
+            GOOS: [linux, darwin, windows]
+            GOARCH: [amd64, arm64]
+        cmd: >-
+          GOOS={{.ITEM.GOOS}} GOARCH={{.ITEM.GOARCH}} CGO_ENABLED=0
+          go build -trimpath -ldflags "{{.LDFLAGS}}"
+          -o "{{.ROOT_DIR}}/dist/cross/px-server-{{.ITEM.GOOS}}-{{.ITEM.GOARCH}}{{if eq .ITEM.GOOS "windows"}}.exe{{end}}"
+          ./cmd/px-server
+
+  package:
+    desc: Build release archives and SHA-256 checksums for supported platforms
+    deps: [cross-build]
+    cmds:
+      - >-
+        go run ./cmd/px-package
+        --input "{{.ROOT_DIR}}/dist/cross"
+        --output "{{.ROOT_DIR}}/dist/release/{{.VERSION}}"
+        --license "{{.ROOT_DIR}}/LICENSE"
+        --notices "{{.ROOT_DIR}}/THIRD_PARTY_NOTICES.md"
+        --version "{{.VERSION}}"
+        --commit "{{.COMMIT}}"
+        --built "{{.BUILD_DATE}}"
+
+  version:
+    desc: Print the derived build identity
+    cmds:
+      - printf '%s commit=%s built=%s\n' '{{.VERSION}}' '{{.COMMIT}}' '{{.BUILD_DATE}}'
+
+  run:agent:
+    desc: Run the local PX agent
+    cmds:
+      - go run ./cmd/px agent run
+
+  run:server:
+    desc: Run the PX rendezvous server
+    cmds:
+      - go run ./cmd/px-server serve
+
+  fast:
+    desc: Run the fast developer verification gate
+    deps: [fmt:check, lint, test, test:smoke]
+
+  check:
+    desc: Run authoritative pre-merge verification
+    deps: [fmt:check, lint, test, test:process:check, test:race, vuln, cross-build]

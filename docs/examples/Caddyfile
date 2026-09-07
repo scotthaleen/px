@@ -1,0 +1,28 @@
+# Certificates are provisioned and renewed outside Caddy in this topology.
+px.example {
+	tls /etc/px/tls/fullchain.pem /etc/px/tls/privkey.pem
+
+	log {
+		output stderr
+		format json
+	}
+
+	reverse_proxy 127.0.0.1:8080 {
+		# PX trusts this value only because the loopback Caddy CIDR is configured.
+		header_up X-Forwarded-For {http.request.remote.host}
+		header_up -Forwarded
+
+		health_uri /readyz
+		health_interval 30s
+		health_timeout 5s
+		stream_timeout 0
+		stream_close_delay 5m
+
+		transport http {
+			dial_timeout 5s
+			response_header_timeout 10s
+			keepalive 30s
+			keepalive_idle_conns 32
+		}
+	}
+}

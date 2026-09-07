@@ -1,0 +1,22 @@
+[Unit]
+Description=PX rendezvous server
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=px
+Group=px
+Environment=PX_HOME=/var/lib/px
+WorkingDirectory=/var/lib/px
+UMask=0077
+ExecStart=/usr/local/bin/px-server serve --listen 127.0.0.1:8080 --trusted-proxy 127.0.0.1/32
+ExecStop=/usr/local/bin/px-server stop
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

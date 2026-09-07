@@ -1,0 +1,54 @@
+# Both final binaries expose build identity without touching PX_HOME.
+exec px version
+stdout '^px dev \(commit unknown, built unknown\)$'
+! exists $PX_HOME
+
+exec px-server version
+stdout '^px-server dev \(commit unknown, built unknown\)$'
+! exists $PX_HOME
+
+# Command trees expose the intended long-running entry points.
+exec px agent --help
+stdout 'Manage the local PX agent'
+stdout 'run'
+! exec px status
+stderr 'PX agent is not reachable'
+
+# Completion generation is local and does not create PX state.
+exec px completion bash
+stdout '__complete'
+exec px completion zsh
+stdout '#compdef px'
+exec px completion fish
+stdout 'complete -c px'
+exec px completion powershell
+stdout 'Register-ArgumentCompleter'
+! exists $PX_HOME
+
+# Peer-first syntax has deterministic help, validation, and completion.
+exec px --help
+stdout '-c, --context string'
+! exec px @vm
+stderr 'command required after @PEER; valid forms:'
+stderr 'supported commands: ls, get, put, send, text, recent, ping, benchmark, and doctor'
+stdout '^$'
+! exec px @vm context list
+stderr 'command "context" does not support peer-first syntax'
+! exec px @ ls
+stderr 'peer target must be @LABEL'
+! exec px @bad/peer ls
+stderr 'peer target: label must'
+! exec px @vm doctor --peer other
+stderr 'peer-first doctor cannot be combined with --peer'
+! exec px -- @vm ls
+stderr 'peer-first target must appear before --'
+exec px __complete @vm s
+stdout '^send$'
+! stdout '^get$'
+stdout '^:4$'
+! exec px -vvcwork @vm ls
+stderr 'PX agent'
+
+exec px-server --help
+stdout 'PX rendezvous and STUN server'
+stdout 'serve'
