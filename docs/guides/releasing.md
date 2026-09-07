@@ -13,7 +13,7 @@ Release versions use UTC `YYYY.MM.DD`. Additional releases on the same date use 
 
 The workflow attaches public `install.sh` and `install.ps1` scripts, six archives, and `SHA256SUMS`. Linux and macOS archives use `.tar.gz`; Windows archives use `.zip`. Each platform has amd64 and arm64 builds, and each archive includes `px`, `px-server`, the release manifest, license, and notices. Checksums cover both installers and all archives. Builds have no deployment-specific rendezvous default. No private installer or local deployment artifact is uploaded.
 
-After publication, update the in-repository [Homebrew formula](homebrew.md#release-maintenance) to the new source tag, source checksum, and commit. This is a separate source commit, not an edit to published release assets.
+After publication, update the in-repository [Homebrew formula](homebrew.md#maintain-the-formula) to the new source tag, source checksum, and commit. This is a separate source commit, not an edit to published release assets.
 
 All platforms are cross-built on Linux. Linux amd64 packaged executables are also run before upload. Native CI is not equivalent to executing every release archive: Windows arm64 and the remaining architecture combinations still need the native validation campaign. Binaries are not OS-code-signed or notarized; checksums are integrity checks, not independent publisher authentication.
 
