@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -127,7 +128,7 @@ func TestPingDiagnosticsProcesses(t *testing.T) {
 		t.Fatalf("all-loss ping = %+v", all)
 	}
 
-	for range 17 {
+	for attempt := range 17 {
 		started := make(chan struct{})
 		fixture.plans <- pingFixturePlan{ignore: true, started: started}
 		requestContext, requestCancel := context.WithCancel(ctx)
@@ -138,8 +139,12 @@ func TestPingDiagnosticsProcesses(t *testing.T) {
 		}()
 		select {
 		case <-started:
+		case err := <-result:
+			requestCancel()
+			t.Fatalf("setup cancellation %d returned before fixture signaling: %v", attempt+1, err)
 		case <-ctx.Done():
-			t.Fatal(ctx.Err())
+			requestCancel()
+			t.Fatalf("setup cancellation %d waiting for fixture signaling: %v", attempt+1, ctx.Err())
 		}
 		requestCancel()
 		if err := <-result; !errors.Is(err, context.Canceled) {
@@ -166,7 +171,6 @@ func TestPingDiagnosticsProcesses(t *testing.T) {
 		t.Fatalf("sampling cancellation = %v", err)
 	}
 	waitFixtureIdle(t, ctx, fixture)
-	time.Sleep(200 * time.Millisecond)
 
 	const concurrent = 4
 	cancels := make([]context.CancelFunc, 0, concurrent)
@@ -179,13 +183,30 @@ func TestPingDiagnosticsProcesses(t *testing.T) {
 		requestContext, requestCancel := context.WithCancel(ctx)
 		cancels = append(cancels, requestCancel)
 		go func() {
-			var output ping.Result
-			results <- localipc.NewAgentClient(paths.AgentEndpoint).JSONStrict(requestContext, http.MethodPost, "/v1/ping", agentapi.PingRequest{Version: ping.Version, Context: "home", Peer: "fixture", Count: 10}, &output)
+			// Client cancellation is not an acknowledgment of agent cleanup.
+			// Retry only rejected admission; it has not consumed a fixture plan.
+			for {
+				var output ping.Result
+				err := localipc.NewAgentClient(paths.AgentEndpoint).JSONStrict(requestContext, http.MethodPost, "/v1/ping", agentapi.PingRequest{Version: ping.Version, Context: "home", Peer: "fixture", Count: 10}, &output)
+				var responseError *localipc.Error
+				if !errors.As(err, &responseError) || responseError.Status != http.StatusTooManyRequests {
+					results <- err
+					return
+				}
+				select {
+				case <-requestContext.Done():
+					results <- requestContext.Err()
+					return
+				case <-time.After(25 * time.Millisecond):
+				}
+			}
 		}()
 	}
 	for _, ready := range started {
 		select {
 		case <-ready:
+		case err := <-results:
+			t.Fatalf("concurrent ping returned before fixture signaling: %v", err)
 		case <-ctx.Done():
 			t.Fatal(ctx.Err())
 		}
@@ -475,9 +496,54 @@ func (s *pingFixtureSignaler) Close() error {
 		s.cancel()
 		s.fixture.mu.Lock()
 		delete(s.fixture.signalers, s.session)
+		// Late ICE candidates must not consume a plan for the next ping.
+		s.fixture.ignored[s.session] = true
 		s.fixture.mu.Unlock()
 	})
 	return nil
+}
+
+func TestPingFixtureIgnoresClosedSessionSignals(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.CloseNow()
+		for _, session := range []string{"closed", "live"} {
+			payload, _ := json.Marshal(signalproto.Envelope{Session: session, Kind: signalproto.KindCandidate})
+			data, _ := json.Marshal(rendezvousproto.ControlMessage{Version: rendezvousproto.Version, Type: "signal", From: "peer", Payload: payload})
+			if err := conn.Write(ctx, websocket.MessageText, data); err != nil {
+				return
+			}
+		}
+		<-conn.CloseRead(ctx).Done()
+	}))
+	defer server.Close()
+	conn, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &pingPeerFixture{ctx: ctx, conn: conn, peerID: "peer", plans: make(chan pingFixturePlan, 1), signalers: make(map[string]*pingFixtureSignaler), ignored: make(map[string]bool)}
+	defer f.Close()
+	closedContext, closeSession := context.WithCancel(ctx)
+	closed := &pingFixtureSignaler{fixture: f, session: "closed", ctx: closedContext, cancel: closeSession}
+	f.signalers[closed.session] = closed
+	_ = closed.Close()
+	live := &pingFixtureSignaler{ctx: ctx, incoming: make(chan []byte, 1)}
+	f.signalers["live"] = live
+	f.plans <- pingFixturePlan{ignore: true, started: make(chan struct{})}
+	go f.readLoop()
+	select {
+	case <-live.incoming:
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	if len(f.plans) != 1 {
+		t.Fatal("late signaling consumed the next ping plan")
+	}
 }
 
 func waitContextPeer(t *testing.T, ctx context.Context, home, label string) {

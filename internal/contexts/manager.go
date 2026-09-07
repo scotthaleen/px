@@ -2823,7 +2823,11 @@ func (s *contextSignaler) Send(ctx context.Context, payload []byte) error {
 		return errors.New("signaling envelope exceeds bounds")
 	}
 	_, err := s.control.writes.run(ctx, func() error {
-		return writeWS(ctx, s.control.conn, controlMessage{Version: rendezvousproto.Version, Type: "signal", To: s.peerID, Payload: json.RawMessage(payload)})
+		// Canceling a WebSocket write closes the shared control connection. Once
+		// admitted, finish this frame independently of the direct session.
+		writeContext, cancel := context.WithTimeout(s.control.ctx, 10*time.Second)
+		defer cancel()
+		return writeWS(writeContext, s.control.conn, controlMessage{Version: rendezvousproto.Version, Type: "signal", To: s.peerID, Payload: json.RawMessage(payload)})
 	})
 	return err
 }

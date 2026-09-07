@@ -119,6 +119,9 @@ func TestContextWatchProcessLifecycleAndCancellation(t *testing.T) {
 		t.Fatalf("offline watch = %+v", offline)
 	}
 	stopServerCommand(t, ctx, serverHome)
+	if err := server.Wait(); err != nil {
+		t.Fatalf("wait for server shutdown: %v", err)
+	}
 	disconnected := readWatchProcessEvent(t, scanner)
 	if disconnected.Type != contextwatch.ContextDisconnected {
 		t.Fatalf("disconnected watch = %+v", disconnected)
