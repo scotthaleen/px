@@ -9,7 +9,7 @@
 - Use full-binary `testscript` tests for CLI, configuration, enrollment, and local-agent workflows.
 - Keep network-dependent integration tests behind an `integration` build tag and eventually run them on actual Windows, macOS, and Linux workers where platform behavior matters.
 
-No Forgejo Actions runners are currently available. Task commands and local verification are authoritative; do not add GitHub Actions for a repository hosted primarily on Forgejo. Add Forgejo-native CI only after runners are provisioned.
+GitHub Actions runs Task-based verification on pushes to `master` and pull requests. Linux runs `task check`; macOS and Windows run `task fast` for native package and smoke coverage. These checks do not replace the manual native validation campaign. Forgejo retains historical development records. See [Releasing](guides/releasing.md) for public releases.
 
 ## Verification Tiers
 

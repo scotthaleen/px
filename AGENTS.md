@@ -29,7 +29,7 @@ Use memx scope `project.px` for project-specific durable context. Active status,
 - Use `github.com/scotthaleen/go-app` for lifecycle and application assembly.
 - Use `github.com/scotthaleen/go-toolbelt` components where they fit. Follow the installed `go-app` skill when available; this repository's instructions and ADRs remain authoritative.
 - Use Task, `gofumpt`, Goose with embedded migrations, UTC CalVer build metadata, full-binary `testscript` tests, and cross-platform verification as documented.
-- No Forgejo Actions runners are currently available. Use Task and local verification; do not add GitHub Actions. Add Forgejo CI only when runners exist.
+- GitHub Actions runs Task-based verification and manually triggered CalVer releases. Forgejo retains historical development records; never merge its old ancestry into the independent public GitHub history.
 - Tests and local development must set `PX_HOME` to isolated scratch state rather than using the user's installed PX data.
 - Use the ignored repository `tmp/` directory for disposable scratch artifacts when useful. Never treat its contents as durable input or commit them.
 - Write generated binaries, cross-builds, release archives, and checksums beneath the ignored repository `dist/` directory.
