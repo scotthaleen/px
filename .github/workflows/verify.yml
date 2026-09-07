@@ -28,7 +28,7 @@ jobs:
         run: go install github.com/go-task/task/v3/cmd/task@v3.44.1
       - name: Full verification
         if: runner.os == 'Linux'
-        run: task check
+        run: task --concurrency 1 check
       - name: Native smoke and package tests
         if: runner.os != 'Linux'
-        run: task fast
+        run: task --concurrency 1 fast
